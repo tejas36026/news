@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Video Carousel</title>
+  <link rel="shortcut icon" href="#">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="./style.css">    
+</head>
+<body>
+  <div class="carousel-container user-active">
+    <div class="carousel">
+      <video id="video-1" crossorigin="anonymous" src="https://cdn.glitch.global/bed4b085-2a8a-4e39-93c7-8f065ab89cc2/Untitled%20video%20-%20Made%20with%20Clipchamp%20(1)%20(1).mp4?v=1743247313694" muted></video>
+    </div>
+    
+    <div class="top-controls">
+      <div class="top-left-controls">
+        <button id="fullscreen-btn" aria-label="Toggle fullscreen">
+          <i data-lucide="maximize"></i>
+        </button>
+      </div>
+      <div class="top-right-controls">
+        <button id="record-btn" aria-label="Record content">
+          <i data-lucide="video"></i> 
+        </button>
+        <button id="toggle-content-btn" aria-label="Show news content">
+          <i data-lucide="file-text"></i>
+        </button>
+        <button id="history-btn" aria-label="View history">
+          <i data-lucide="clock"></i>
+        </button>
+      </div>
+    </div>
+    
+    <div class="arrows">
+      <button class="arrow-btn" id="prev-btn" aria-label="Previous news item">
+        <i data-lucide="chevron-left"></i>
+      </button>
+      <button class="arrow-btn" id="next-btn" aria-label="Next news item">
+        <i data-lucide="chevron-right"></i>
+      </button>
+    </div>
+    
+    <div class="progress-container" id="progress-container">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    
+    <div class="controls">
+      <div class="left-controls">
+        <button id="play-pause-btn" aria-label="Play/Pause">
+          <i data-lucide="play" id="play-pause-icon"></i>
+        </button>
+        <div class="volume-control">
+          <button id="mute-btn" aria-label="Mute/Unmute">
+            <i data-lucide="volume-2" id="volume-icon"></i>
+          </button>
+          <div class="volume-slider-container">
+            <input type="range" min="0" max="1" step="0.01" value="1" class="volume-slider" id="volume-slider" orient="vertical">
+          </div>
+        </div>
+      </div>
+      <div class="right-controls">
+        <span class="time-display" id="time-display">0:00 / 0:00</span>
+      </div>
+    </div>
+    
+    <div class="footer-banner">
+      <div class="logo">
+        <img src="https://cdn.glitch.global/bed4b085-2a8a-4e39-93c7-8f065ab89cc2/logo1.jpg?v=1743076397730" alt="Logo">
+        <span>Imaginea.store</span> 
+      </div>
+      <div class="headline" id="headline">Headline goes here - this will display the current news headline</div>
+    </div>
+    
+    <div class="news-content" id="news-content">
+      <button class="content-close" id="content-close" aria-label="Close content">
+        <i data-lucide="x"></i>
+      </button>
+      <h2 id="content-title">Loading title...</h2>
+      <div id="content-image-container">
+        <img id="content-image" class="news-image" alt="News image">
+      </div>
+      <p id="content-description">Loading description...</p>
+      <div class="news-meta">
+        <span id="content-source">Source: Unknown</span>
+        <span id="content-date">Date: Unknown</span>
+      </div>
+      <a id="content-url" class="read-more" href="#" target="_blank">Read full article</a>
+    </div>
+    
+    <div class="history-panel" id="history-panel">
+      <h3>Previous News</h3>
+      <button class="history-close" id="history-close" aria-label="Close history">
+        <i data-lucide="x"></i>
+      </button>
+      <div id="history-list"></div>
+    </div>
+    
+    <div class="audio-player">
+      <audio id="news-audio" crossorigin="anonymous" src="https://cdn.glitch.global/bed4b085-2a8a-4e39-93c7-8f065ab89cc2/news.mp3?v=1743076375767"></audio>
+      <audio id="tts-audio" crossorigin="anonymous"></audio>
+    </div>
+    
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <p class="loading-text">Loading latest news...</p>
+    </div>
+
+    <div class="error-message" id="error-message"></div>
+  </div>
+
+  <script>
+    let isTransitioning = false;
+    let audioEnded = false;
+let ttsAbortController = new AbortController();
+
+    const carousel = document.querySelector('.carousel');
+    const video = document.getElementById('video-1');
+    if (!video.hasAttribute('crossorigin')) {
+      video.setAttribute('crossorigin', 'anonymous');
+    }
+
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const playPauseBtn = document.getElementById('play-pause-btn');
+    const playPauseIcon = document.getElementById('play-pause-icon');
+    const muteBtn = document.getElementById('mute-btn');
+    const volumeIcon = document.getElementById('volume-icon');
+    const volumeSlider = document.getElementById('volume-slider');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const timeDisplay = document.getElementById('time-display');
+    const headline = document.getElementById('headline');
+    const historyBtn = document.getElementById('history-btn');
+    const historyPanel = document.getElementById('history-panel');
+    const historyClose = document.getElementById('history-close');
+    const historyList = document.getElementById('history-list');
+    const newsAudio = document.getElementById('news-audio');
+    if (!newsAudio.hasAttribute('crossorigin')) {
+      newsAudio.setAttribute('crossorigin', 'anonymous');
+    }
+    const ttsAudio = document.getElementById('tts-audio');
+    if (!ttsAudio.hasAttribute('crossorigin')) {
+      ttsAudio.setAttribute('crossorigin', 'anonymous');
+    }
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const carouselContainer = document.querySelector('.carousel-container');
+    const errorMessage = document.getElementById('error-message');
+    
+    // Content display elements
+    const newsContent = document.getElementById('news-content');
+    const toggleContentBtn = document.getElementById('toggle-content-btn');
+    const contentClose = document.getElementById('content-close');
+    const contentTitle = document.getElementById('content-title');
+    const contentImage = document.getElementById('content-image');
+    const contentImageContainer = document.getElementById('content-image-container');
+    const contentDescription = document.getElementById('content-description');
+    const contentSource = document.getElementById('content-source');
+    const contentDate = document.getElementById('content-date');
+    const contentUrl = document.getElementById('content-url');
+    
+    let currentIndex = 0;
+    let newsItems = [];
+    let currentBatchId = null;
+    let isPlaying = false;
+    let contentVisible = false;
+    let autoAdvanceInterval = null;
+    let lastVolume = 1;
+    let userActivityTimeout;
+    let newsBatches = [];
+
+    // API endpoints
+    const API_LATEST_NEWS = '/api/news/latest';
+    const API_NEWS_BATCHES = '/api/news/batches';
+    const API_NEWS_BY_BATCH = '/api/news/batch/';
+
+    async function init() {
+      await lucide.createIcons();
+      
+      loadingOverlay.style.display = 'flex';
+      
+      try {
+        const response = await fetch(API_LATEST_NEWS);
+        if (!response.ok) {
+          throw new Error('Failed to fetch latest news');
+        }
+        
+        const data = await response.json();
+        
+        if (data.articles && data.articles.length > 0) {
+          newsItems = data.articles;
+          
+          if (newsItems[0].batch_id) {
+            currentBatchId = newsItems[0].batch_id;
+          }
+          
+          updateHeadline();
+          updateFullContent();
+        } else {
+          showError('No news articles available');
+        }
+      } catch (error) {
+        console.error('Error fetching news:', error);
+        showError('Error loading news. Please try again later.');
+      } finally {
+        loadingOverlay.style.display = 'none';
+        updateVideoDurationDisplay();
+        startUserActivityMonitor();
+        setupEventListeners();
+        
+        video.pause();
+        newsAudio.pause();
+        updatePlayPauseIcon();
+      }
+    }
+
+    function setupEventListeners() {
+      prevBtn.addEventListener('click', goToPrevious);
+      nextBtn.addEventListener('click', goToNext);
+      playPauseBtn.addEventListener('click', togglePlayPause);
+      muteBtn.addEventListener('click', toggleMute);
+      volumeSlider.addEventListener('input', updateVolume);
+      progressContainer.addEventListener('click', seekVideo);
+      video.addEventListener('timeupdate', updateProgressBar);
+      video.addEventListener('ended', handleVideoEnded);
+      video.addEventListener('error', handleMediaError);
+      
+      newsAudio.addEventListener('error', handleMediaError);
+      newsAudio.addEventListener('ended', handleAudioEnded);
+      
+      toggleContentBtn.addEventListener('click', showContentPanel);
+      contentClose.addEventListener('click', hideContentPanel);
+      
+      historyBtn.addEventListener('click', openHistoryPanel);
+      historyClose.addEventListener('click', closeHistoryPanel);
+      fullscreenBtn.addEventListener('click', toggleFullscreen);
+      
+      setupRecordingButton();
+      
+      document.addEventListener('keydown', handleKeyboardShortcuts);
+      document.addEventListener('fullscreenchange', updateFullscreenIcon);
+      
+      carouselContainer.addEventListener('mousemove', userActive);
+      carouselContainer.addEventListener('touchstart', userActive);
+      carouselContainer.addEventListener('mouseenter', userActive);
+    }
+    
+    function handleAudioEnded() {
+      audioEnded = true;
+      console.log("Audio ended");
+      
+      if (isPlaying) {
+        setTimeout(() => {
+          goToNext();
+        }, 1000);
+      }
+    }
+
+    let currentTtsAudio = null; // Add this variable at the top of your script
+
+    
+    
+    function speakNewsItem() {
+  audioEnded = false;
+  ttsAbortController.abort();
+  ttsAbortController = new AbortController();
+
+  const currentItem = newsItems[currentIndex];
+  if (!currentItem) return;
+
+  if (!isPlaying) return;
+
+  // Reset audio elements
+  newsAudio.pause();
+  newsAudio.currentTime = 0;
+  if (currentTtsAudio) {
+    currentTtsAudio.pause();
+    currentTtsAudio = null;
+  }
+
+  try {
+    newsAudio.play().catch(e => {
+      if (e.name !== 'AbortError') {
+        console.error('News audio play error:', e);
+      }
+    });
+
+    // Check if TTS audio path exists
+    if (currentItem.tts_audio_path) {
+      console.log('Using cached TTS audio:', currentItem.tts_audio_path);
+      
+      // Create a new Audio element for better control
+      currentTtsAudio = new Audio(currentItem.tts_audio_path);
+      
+      // Set volume to match the main volume
+      currentTtsAudio.volume = video.volume;
+      
+      // Add event listeners
+      currentTtsAudio.onended = () => {
+        console.log('TTS audio ended');
+        audioEnded = true;
+        if (isPlaying) {
+          setTimeout(() => {
+            goToNext();
+          }, 1000);
+        }
+      };
+      
+      currentTtsAudio.onerror = (e) => {
+        console.error('TTS audio error:', e);
+        // If there's an error with the cached audio, try to fetch a new one
+        if (currentItem.id) {
+          console.log('Trying to regenerate TTS audio for news ID:', currentItem.id);
+          fetch('/api/tts/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              newsId: currentItem.id,
+              text: `${currentItem.title}. ${currentItem.description || ''}`
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.audioPath) {
+              console.log('Generated new TTS audio:', data.audioPath);
+              currentItem.tts_audio_path = data.audioPath;
+              // Try playing the newly generated audio
+              if (currentTtsAudio) currentTtsAudio.pause();
+              currentTtsAudio = new Audio(data.audioPath);
+              currentTtsAudio.volume = video.volume;
+              currentTtsAudio.play().catch(e => console.error('Failed to play regenerated TTS:', e));
+            }
+          })
+          .catch(err => console.error('Failed to regenerate TTS:', err));
+        }
+      };
+      
+      // Start playing
+      currentTtsAudio.play().catch(e => {
+        if (e.name !== 'AbortError') {
+          console.error('TTS audio play error:', e);
+        }
+      });
+    } else if (currentItem.id) {
+      // No cached audio path, generate one
+      console.log('No TTS audio found, generating for news ID:', currentItem.id);
+      fetch('/api/tts/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          newsId: currentItem.id,
+          text: `${currentItem.title}. ${currentItem.description || ''}`
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.audioPath) {
+          console.log('Generated TTS audio:', data.audioPath);
+          currentItem.tts_audio_path = data.audioPath;
+          if (isPlaying) {
+            currentTtsAudio = new Audio(data.audioPath);
+            currentTtsAudio.volume = video.volume;
+            currentTtsAudio.onended = () => {
+              console.log('TTS audio ended');
+              audioEnded = true;
+              if (isPlaying) {
+                setTimeout(() => {
+                  goToNext();
+                }, 1000);
+              }
+            };
+            currentTtsAudio.play().catch(e => console.error('Failed to play new TTS:', e));
+          }
+        }
+      })
+      .catch(err => console.error('Failed to generate TTS:', err));
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.error('Audio playback error:', e);
+    }
+  }
+}
+
+    
+function stopSpeaking() {
+  ttsAbortController.abort();
+  ttsAudio.pause();
+  ttsAudio.currentTime = 0;
+  newsAudio.pause();
+  newsAudio.currentTime = 0;
+  if (currentTtsAudio) {
+    currentTtsAudio.pause();
+    currentTtsAudio.currentTime = 0;
+  }
+}
+    
+    
+    function userActive() {
+      carouselContainer.classList.remove('user-inactive');
+      carouselContainer.classList.add('user-active');
+      
+      clearTimeout(userActivityTimeout);
+      userActivityTimeout = setTimeout(() => {
+        if (isPlaying && !contentVisible && !historyPanel.classList.contains('active')) {
+          carouselContainer.classList.remove('user-active');
+          carouselContainer.classList.add('user-inactive');
+        }
+      }, 3000);
+    }
+    
+    function startUserActivityMonitor() {
+      userActive();
+    }
+
+    function updateHeadline() {
+      if (newsItems.length === 0) {
+        headline.textContent = 'No news available.';
+        return;
+      }
+      
+      headline.textContent = newsItems[currentIndex].title;
+    }
+    
+    function updateFullContent() {
+      if (newsItems.length === 0) return;
+      
+      const currentItem = newsItems[currentIndex];
+      
+      contentTitle.textContent = currentItem.title || 'No title available';
+      contentDescription.textContent = currentItem.description || 'No description available';
+      contentSource.textContent = `Source: ${currentItem.source || 'Unknown'}`;
+      
+      if (currentItem.publishedAt) {
+        const date = new Date(currentItem.publishedAt);
+        contentDate.textContent = `Published: ${date.toLocaleString()}`;
+      } else {
+        contentDate.textContent = 'Published: Unknown';
+      }
+      
+      contentUrl.href = currentItem.url || '#';
+      
+      if (currentItem.image) {
+        contentImage.src = currentItem.image;
+        contentImageContainer.style.display = 'block';
+      } else {
+        contentImageContainer.style.display = 'none';
+      }
+    }
+
+    async function goToNext() {
+      if (isTransitioning) return;
+      isTransitioning = true;
+      currentIndex = (currentIndex === newsItems.length - 1) ? 0 : currentIndex + 1;
+      await updateCarousel();
+      isTransitioning = false;
+    }
+    
+    async function goToPrevious() {
+      if (isTransitioning) return;
+      isTransitioning = true;
+      currentIndex = (currentIndex === 0) ? newsItems.length - 1 : currentIndex - 1;
+      await updateCarousel();
+      isTransitioning = false;
+    }
+
+    function updateCarousel() {
+      updateHeadline();
+      updateFullContent();
+      updateVideoDurationDisplay();
+      restartVideo();
+      userActive();
+      speakNewsItem();
+    }
+
+    
+    async function restartVideo() {
+  stopSpeaking();
+  audioEnded = false;
+
+  video.currentTime = 0;
+  try {
+    video.pause();
+    if (isPlaying) {
+      await video.play();
+      speakNewsItem();
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.error('Media error:', e);
+      showError('Playback error. Please try again.');
+    }
+  }
+  updatePlayPauseIcon();
+}
+
+    function togglePlayPause() {
+      isPlaying = !isPlaying;
+      
+      if (isPlaying) {
+        video.play().catch(handleMediaError);
+        speakNewsItem();
+        startAutoAdvance();
+      } else {
+        video.pause();
+        stopSpeaking();
+        newsAudio.pause();
+        stopAutoAdvance();
+      }
+      
+      updatePlayPauseIcon();
+      userActive();
+    }
+ 
+    function updatePlayPauseIcon() {
+      const btn = document.getElementById('play-pause-btn');
+      btn.innerHTML = `<i data-lucide="${isPlaying ? 'pause' : 'play'}"></i>`;
+      lucide.createIcons();
+    }
+    
+    function startAutoAdvance() {
+      stopAutoAdvance();
+      if (isPlaying) {
+        autoAdvanceInterval = setInterval(() => {
+          if (video.currentTime >= video.duration - 0.5) {
+            goToNext();
+          }
+        }, 1000);
+      }
+    }
+
+    function stopAutoAdvance() {
+      if (autoAdvanceInterval) {
+        clearInterval(autoAdvanceInterval);
+        autoAdvanceInterval = null;
+      }
+    }
+
+    function toggleMute() {
+      if (video.volume > 0) {
+        lastVolume = video.volume;
+        video.volume = 0;
+        newsAudio.volume = 0;
+        volumeSlider.value = 0;
+      } else {
+        video.volume = lastVolume;
+        newsAudio.volume = lastVolume;
+        volumeSlider.value = lastVolume;
+      }
+      updateVolumeIcon(video.volume);
+      userActive();
+    }
+function updateVolume() {
+  const volume = parseFloat(volumeSlider.value);
+  video.volume = volume;
+  newsAudio.volume = volume;
+  if (currentTtsAudio) {
+    currentTtsAudio.volume = volume;
+  }
+  updateVolumeIcon(volume);
+  
+  if (volume > 0 && lastVolume === 0) {
+    lastVolume = volume;
+  }
+}
+    function updateVolumeIcon(volume) {
+      const btn = document.getElementById('mute-btn');
+      let iconName = 'volume-x';
+      if (volume > 0.5) iconName = 'volume-2';
+      else if (volume > 0) iconName = 'volume-1';
+      
+      btn.innerHTML = `<i data-lucide="${iconName}"></i>`;
+      lucide.createIcons();
+    }
+
+    function updateProgressBar() {
+      if (video.duration) {
+        const progress = (video.currentTime / video.duration) * 100;
+        progressBar.style.width = `${progress}%`;
+        updateTimeDisplay();
+      }
+    }
+
+    function seekVideo(e) {
+      const rect = progressContainer.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      if (video.duration) {
+        video.currentTime = percent * video.duration;
+      }
+      userActive();
+    }
+
+    function updateTimeDisplay() {
+      if (video.duration) {
+        const currentTime = formatTime(video.currentTime);
+        const duration = formatTime(video.duration);
+        timeDisplay.textContent = `${currentTime} / ${duration}`;
+      }
+    }
+
+    function updateVideoDurationDisplay() {
+      if (video.duration) {
+        timeDisplay.textContent = `0:00 / ${formatTime(video.duration)}`;
+      } else {
+        timeDisplay.textContent = '0:00 / 0:00';
+      }
+    }
+
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return '0:00';
+      
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function handleVideoEnded() {
+      // Let the audio ended event handle navigation
+    }
+
+    function showContentPanel() {
+      contentVisible = true;
+      newsContent.classList.add('active');
+      
+      if (isPlaying) {
+        togglePlayPause();
+      }
+      
+      userActive();
+    }
+    
+    function hideContentPanel() {
+      contentVisible = false;
+      newsContent.classList.remove('active');
+      userActive();
+    }
+
+    async function openHistoryPanel() {
+      loadingOverlay.style.display = 'flex';
+      loadingOverlay.querySelector('.loading-text').textContent = 'Loading news history...';
+      
+      try {
+        const response = await fetch(API_NEWS_BATCHES);
+        if (!response.ok) {
+          throw new Error('Failed to fetch news batches');
+        }
+        
+        const data = await response.json();
+        newsBatches = data.batches || [];
+        
+        historyPanel.classList.add('active');
+        populateHistoryPanel();
+      } catch (error) {
+        console.error('Error fetching news batches:', error);
+        showError('Error loading news history');
+      } finally {
+        loadingOverlay.style.display = 'none';
+      }
+      
+      userActive();
+    }
+    
+    function populateHistoryPanel() {
+      historyList.innerHTML = '';
+      
+      if (newsBatches.length === 0) {
+        const noHistory = document.createElement('div');
+        noHistory.className = 'history-item';
+        noHistory.textContent = 'No history available';
+        historyList.appendChild(noHistory);
+        return;
+      }
+      
+      newsBatches.forEach((batch) => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        
+        const date = new Date(batch.fetch_time);
+        const formattedDate = date.toLocaleString();
+        
+        item.textContent = `News from ${formattedDate} (${batch.article_count} articles)`;
+        item.dataset.batchId = batch.batch_id;
+        
+        if (batch.batch_id === currentBatchId) {
+          item.style.backgroundColor = 'rgba(74, 144, 226, 0.3)';
+          item.style.borderLeft = '3px solid #4a90e2';
+        }
+        
+        item.addEventListener('click', () => {
+          loadNewsBatch(batch.batch_id);
+        });
+        
+        historyList.appendChild(item);
+      });
+    }
+
+    async function loadNewsBatch(batchId) {
+      loadingOverlay.style.display = 'flex';
+      loadingOverlay.querySelector('.loading-text').textContent = 'Loading news batch...';
+      
+      try {
+        const response = await fetch(`${API_NEWS_BY_BATCH}${batchId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch news batch');
+        }
+        
+        const data = await response.json();
+        
+        if (data.articles && data.articles.length > 0) {
+          newsItems = data.articles;
+          currentBatchId = batchId;
+          currentIndex = 0;
+          
+          updateHeadline();
+          updateFullContent();
+          updateVideoDurationDisplay();
+          
+          stopSpeaking();
+          restartVideo();
+          
+          closeHistoryPanel();
+        } else {
+          showError('No articles found in this batch');
+        }
+      } catch (error) {
+        console.error('Error fetching news batch:', error);
+        showError('Error loading news batch');
+      } finally {
+        loadingOverlay.style.display = 'none';
+      }
+    }
+
+    function closeHistoryPanel() {
+      historyPanel.classList.remove('active');
+      userActive();
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.querySelector('.carousel-container').requestFullscreen().catch(err => {
+          console.error('Error attempting to enable fullscreen:', err);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+      userActive();
+    }
+
+    function updateFullscreenIcon() {
+      const icon = document.fullscreenElement ? 'minimize' : 'maximize';
+      fullscreenBtn.innerHTML = `<i data-lucide="${icon}"></i>`;
+      lucide.createIcons();
+    }
+
+    function handleMediaError(e) {
+      console.error('Media error:', e);
+      const mediaElement = e.target;
+      if (mediaElement.error) {
+        console.error('Media error details:', mediaElement.error);
+      }
+      
+      if (e.target.id === 'video-1') {
+        showError('Video playback error.');
+      } else if (e.target.id === 'news-audio') {
+        console.warn('Background news audio playback error.');
+      }
+    }
+
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorMessage.classList.add('active');
+      
+      setTimeout(() => {
+        errorMessage.classList.remove('active');
+      }, 5000);
+    }
+
+    function handleKeyboardShortcuts(e) {
+      if (e.code === 'Space') {
+        e.preventDefault();
+      }
+      
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      switch(e.code) {
+        case 'ArrowLeft':
+          goToPrevious();
+          break;
+        case 'ArrowRight':
+          goToNext();
+          break;
+        case 'Space':
+          togglePlayPause();
+          break;
+        case 'KeyR':
+          toggleRecording();
+          break;
+        case 'KeyH':
+          historyPanel.classList.contains('active') ? closeHistoryPanel() : openHistoryPanel();
+          break;
+        case 'KeyI':
+          contentVisible ? hideContentPanel() : showContentPanel();
+          break;
+        case 'KeyM':
+          toggleMute();
+          break;
+        case 'KeyF':
+          toggleFullscreen();
+          break;
+        case 'Escape':
+          if (historyPanel.classList.contains('active')) {
+            closeHistoryPanel();
+          } else if (contentVisible) {
+            hideContentPanel();
+          } else if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else if (isRecording) {
+            stopRecording();
+            updateRecordButton();
+          }
+          break;
+      }
+      
+      userActive();
+    }
+    
+    // Initialize the app
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+  
+<script src =  "record.js"></script>
+<script src =  "share.js"></script>
+</body>
+</html> 

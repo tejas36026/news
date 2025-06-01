@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Combiner & Download</title>
+</head>
+<body>
+    <button onclick="combineAndDownload()">Combine & Download Audio</button>
+    <div id="status"></div>
+
+    <script>
+        async function combineAndDownload() {
+            try {
+                const status = document.getElementById('status');
+                status.textContent = 'Downloading and processing audio...';
+
+                // Create audio context
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Fetch and decode both audio files
+                const [audio1, audio2] = await Promise.all([
+                    fetchAudio(''),
+                    fetchAudio('https://news-channels.glitch.me/audio/news_566_1743959437800.mp3')
+                ]);
+
+                status.textContent = 'Mixing audio...';
+
+                // Create offline context for rendering
+                const offlineContext = new OfflineAudioContext({
+                    numberOfChannels: Math.max(audio1.numberOfChannels, audio2.numberOfChannels),
+                    length: Math.max(audio1.length, audio2.length),
+                    sampleRate: audio1.sampleRate
+                });
+
+                // Create buffer sources
+                const source1 = createSource(offlineContext, audio1);
+                const source2 = createSource(offlineContext, audio2);
+
+                // Connect sources to destination
+                source1.connect(offlineContext.destination);
+                source2.connect(offlineContext.destination);
+
+                // Start sources
+                source1.start();
+                source2.start();
+
+                // Render to buffer
+                const renderedBuffer = await offlineContext.startRendering();
+                
+                status.textContent = 'Encoding WAV file...';
+                
+                // Convert to WAV format and download
+                const wavBlob = audioBufferToWav(renderedBuffer);
+                downloadBlob(wavBlob, 'combined-audio.wav');
+                
+                status.textContent = 'Download ready!';
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function fetchAudio(url) {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            return new AudioContext().decodeAudioData(arrayBuffer);
+        }
+
+        function createSource(context, buffer) {
+            const source = context.createBufferSource();
+            source.buffer = buffer;
+            return source;
+        }
+
+        function audioBufferToWav(buffer) {
+            const numChannels = buffer.numberOfChannels;
+            const length = buffer.length * numChannels * 2;
+            const wav = new DataView(new ArrayBuffer(44 + length));
+            
+            // WAV header
+            writeString(wav, 0, 'RIFF');
+            wav.setUint32(4, 36 + length, true);
+            writeString(wav, 8, 'WAVE');
+            writeString(wav, 12, 'fmt ');
+            wav.setUint32(16, 16, true);
+            wav.setUint16(20, 1, true);
+            wav.setUint16(22, numChannels, true);
+            wav.setUint32(24, buffer.sampleRate, true);
+            wav.setUint32(28, buffer.sampleRate * numChannels * 2, true);
+            wav.setUint16(32, numChannels * 2, true);
+            wav.setUint16(34, 16, true);
+            writeString(wav, 36, 'data');
+            wav.setUint32(40, length, true);
+
+            // Audio data
+            let offset = 44;
+            for (let i = 0; i < buffer.length; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                    wav.setInt16(offset, sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+
+            return new Blob([wav], { type: 'audio/wav' });
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
